@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sasta BF</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configure Tailwind for custom colors and Inter font -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        // Updated to match the logo color (Teal)
+                        'primary': '#0f766e', // Teal-700 for main accents
+                        'secondary': '#10b981', // Emerald-500 for success/cart
+                        'background': '#f9fafb', // Gray-50
+                        'accent': '#f97316', // Orange-500 for buttons/calls to action
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styles for the cart drawer animation */
+        .cart-drawer {
+            transition: transform 0.3s ease-in-out;
+            transform: translateX(100%);
+        }
+        .cart-drawer.open {
+            transform: translateX(0);
+        }
+        /* Style for the button hover effect */
+        .btn-primary {
+            transition: background-color 0.3s, transform 0.1s;
+        }
+        .btn-primary:hover {
+            background-color: '#134e4a'; /* Darker Teal */
+        }
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+        /* Custom spinner for the loading screen */
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Modal specific styles */
+        .modal {
+            transition: opacity 0.3s ease-in-out;
+        }
+        .modal-content {
+            transition: transform 0.3s ease-in-out;
+            transform: scale(0.9);
+        }
+        .modal.open .modal-content {
+            transform: scale(1);
+        }
+    </style>
+</head>
+<body class="font-sans bg-background text-gray-800">
+
+    <!-- 1. Loading Screen (Splash Screen) - Starts visible -->
+    <div id="loading-screen" class="fixed inset-0 flex flex-col items-center justify-center bg-primary z-[100] transition-opacity duration-500">
+        <div class="flex flex-col items-center space-y-6">
+            <!-- CORRECTED IMAGE PATH -->
+            <img src="assets/logo.jpg" alt="Sasta BF Logo" class="w-24 h-24 filter brightness-0 invert" onerror="this.outerHTML='<h1 class=\'text-6xl font-extrabold text-white tracking-wider\'>Sasta BF</h1>'">
+            <div class="spinner"></div>
+            <p class="text-white opacity-70">Initializing app...</p>
+        </div>
+    </div>
+    
+    <!-- 3. Main Shop Content - Initially hidden -->
+    <div id="shop-screen" class="hidden">
+        
+        <!-- Header & Navigation -->
+        <header class="sticky top-0 z-30 bg-white shadow-md">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+                <div class="flex items-center space-x-2">
+                    <!-- CORRECTED IMAGE PATH -->
+                    <img src="assets/logo.jpg" alt="Sasta BF Logo" class="w-8 h-8" onerror="this.style.display='none'">
+                    <h1 class="text-3xl font-bold text-primary tracking-tight">
+                        Sasta BF
+                    </h1>
+                </div>
+                <nav class="hidden md:flex space-x-8 text-gray-600 font-medium">
+                    <a href="#products" class="hover:text-primary transition duration-150">Products</a>
+                    <a href="#about" class="hover:text-primary transition duration-150">About Us</a>
+                    <a href="#" class="hover:text-primary transition duration-150">Contact</a>
+                </nav>
+                <div class="relative">
+                    <button id="cart-toggle-btn" class="relative p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition duration-150 focus:outline-none">
+                        <!-- Icon: Simple shopping bag (inline SVG) -->
+                        <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+                        <span id="cart-count" class="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-secondary rounded-full">0</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Cart Drawer (Hidden by default) -->
+        <div id="cart-drawer" class="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl z-50 cart-drawer flex flex-col">
+            <div class="p-6 border-b flex justify-between items-center">
+                <h2 class="text-2xl font-semibold text-gray-800">Your Cart</h2>
+                <button id="close-cart-btn" class="text-gray-500 hover:text-gray-800 focus:outline-none">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="cart-items-container" class="flex-grow overflow-y-auto p-4 space-y-4">
+                <!-- Cart items will be rendered here by JavaScript -->
+                <p class="text-center text-gray-500 mt-8">Your cart is empty.</p>
+            </div>
+            <div class="p-6 border-t">
+                <div class="flex justify-between font-bold text-lg mb-4">
+                    <span>Total:</span>
+                    <span id="cart-total">₹0</span>
+                </div>
+                <button class="w-full btn-primary text-white font-semibold py-3 rounded-xl shadow-lg bg-secondary hover:bg-emerald-600 transition duration-150" onclick="checkout()">
+                    Proceed to Checkout
+                </button>
+            </div>
+        </div>
+        <!-- Cart Overlay -->
+        <div id="cart-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="toggleCart(false)"></div>
+
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <!-- Hero Section -->
+            <section class="text-center py-20 lg:py-32 bg-white rounded-xl shadow-xl mt-6 mb-12">
+                <h2 class="text-5xl lg:text-6xl font-extrabold text-gray-900 mb-4 leading-tight">
+                    Discover <span class="text-primary">Quality</span>, Shop Locally.
+                </h2>
+                <p class="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
+                    Hand-picked Partners For Your Life. We focus on loyalty, sex durability, caring, loving, and a sustainable approach.
+                </p>
+                <a href="#products" class="inline-block btn-primary bg-primary text-white font-semibold py-3 px-8 rounded-xl text-lg shadow-xl hover:shadow-2xl hover:bg-indigo-700 transition duration-300">
+                    Explore Products
+                </a>
+            </section>
+
+            <!-- About Us Section -->
+            <section id="about" class="py-12 md:py-16 mb-12 bg-white rounded-xl shadow-xl p-8 lg:p-12">
+                <h2 class="text-4xl font-bold text-gray-900 mb-10 text-center border-b pb-4">Our Core Philosophy</h2>
+                <div class="grid md:grid-cols-2 gap-10 items-center">
+                    <div>
+                        <h3 class="text-2xl font-semibold text-primary mb-4">The Sasta BF Difference</h3>
+                        <p class="text-gray-600 mb-4">
+                            At Sasta BF, we believe that true value lies not in fleeting appearances, but in enduring qualities. We are dedicated to providing companionships that are genuine, low-maintenance, and perfectly suited to your unique needs. We cut through the noise to focus on what matters: unwavering loyalty and a relationship that simply fits into your life without drama.
+                        </p>
+                        <p class="text-gray-600">
+                            Our process is simple: honesty and clear specifications. Whether you seek short-term fun or long-term commitment, every partner listed here meets our stringent criteria for loyalty and practicality. Welcome to companionship, redefined.
+                        </p>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="p-4 bg-gray-50 rounded-lg shadow-sm border border-primary/20">
+                            <p class="font-bold text-primary">Unwavering Loyalty:</p>
+                            <p class="text-sm text-gray-700">The foundation of every connection we facilitate is built on absolute trust.</p>
+                        </div>
+                        <div class="p-4 bg-gray-50 rounded-lg shadow-sm border border-primary/20">
+                            <p class="font-bold text-primary">Focused Durability:</p>
+                            <p class="text-sm text-gray-700">We clearly specify the expected "durability" so you know exactly what you're getting.</p>
+                        </div>
+                        <div class="p-4 bg-gray-50 rounded-lg shadow-sm border border-primary/20">
+                            <p class="font-bold text-primary">Sustainable Approach:</p>
+                            <p class="text-sm text-gray-700">Companionship should enhance life, not complicate it. Expect simplicity and ease.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Product Listing Section -->
+            <section id="products" class="py-12">
+                <h2 class="text-4xl font-bold text-gray-900 mb-10 text-center">Our Featured Products</h2>
+
+                <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <!-- Product Card 1: Loyal Soleman Alam -->
+                    <div class="product-card bg-white rounded-xl shadow-lg hover:shadow-2xl transition duration-300 overflow-hidden p-6" data-id="1" data-name="Loyal Soleman Alam" data-price="7999" data-desc="Good For Your Food Storage, Durability 2 Min, Small Dick, 101% Loyal, Best For Chubby Girls.">
+                        <!-- CORRECTED IMAGE PATH -->
+                        <img src="assets/product1.jpg" alt="Loyal Soleman Alam" class="w-full h-48 object-cover rounded-lg mb-4">
+                        <h3 class="text-xl font-bold text-gray-900 mb-2">Loyal Soleman Alam</h3>
+                        <p class="text-gray-500 mb-4 text-sm" id="desc-1">Good For Your Food Storage, Durability 2 Min, Small Dick, 101% Loyal, Best For Chubby Girls.</p>
+                        <div class="flex flex-col space-y-3 pt-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-2xl font-extrabold text-primary">₹7,999</span>
+                                <button class="add-to-cart-btn btn-primary bg-primary text-white font-medium py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700" onclick="addItem(1)">
+                                    Add to Cart
+                                </button>
+                            </div>
+                            <!-- Gemini Feature Button -->
+                            <button class="w-full bg-accent/90 text-white font-semibold py-2 px-4 rounded-lg hover:bg-accent transition duration-150" onclick="openCompatibilityModal(1)">
+                                ✨ Check Compatibility
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Product Card 2: Introvert Asfaruj Rahaman -->
+                    <div class="product-card bg-white rounded-xl shadow-lg hover:shadow-2xl transition duration-300 overflow-hidden p-6" data-id="2" data-name="Introvert Asfaruj Rahaman" data-price="5999" data-desc="Will Pretend As You Wish, Durability 25 Min, Loyal 100%, Good For The Extrovert And Baddies.">
+                        <!-- CORRECTED IMAGE PATH -->
+                        <img src="assets/product2.jpg" alt="Introvert Asfaruj Rahaman" class="w-full h-48 object-cover rounded-lg mb-4">
+                        <h3 class="text-xl font-bold text-gray-900 mb-2">Introvert Asfaruj Rahaman</h3>
+                        <p class="text-gray-500 mb-4 text-sm" id="desc-2">Will Pretend As You Wish, Durability 25 Min, Loyal 100%, Good For The Extrovert And Baddies.</p>
+                        <div class="flex flex-col space-y-3 pt-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-2xl font-extrabold text-primary">₹5,999</span>
+                                <button class="add-to-cart-btn btn-primary bg-primary text-white font-medium py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700" onclick="addItem(2)">
+                                    Add to Cart
+                                </button>
+                            </div>
+                            <!-- Gemini Feature Button -->
+                            <button class="w-full bg-accent/90 text-white font-semibold py-2 px-4 rounded-lg hover:bg-accent transition duration-150" onclick="openCompatibilityModal(2)">
+                                ✨ Check Compatibility
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Product Card 3: Pittu Ekbal Sk -->
+                    <div class="product-card bg-white rounded-xl shadow-lg hover:shadow-2xl transition duration-300 overflow-hidden p-6" data-id="3" data-name="Pittu Ekbal Sk" data-price="150" data-desc="Slim As Your Middle Finger, Durability 2 Hour, Loyal 5%, Good For Sex Addicted Baddies.">
+                        <!-- CORRECTED IMAGE PATH -->
+                        <img src="assets/product3.jpg" alt="Pittu Ekbal Sk" class="w-full h-48 object-cover rounded-lg mb-4">
+                        <h3 class="text-xl font-bold text-gray-900 mb-2">Pittu Ekbal Sk</h3>
+                        <p class="text-gray-500 mb-4 text-sm" id="desc-3">Slim As Your Middle Finger, Durability 2 Hour, Loyal 5%, Good For Sex Addicted Baddies.</p>
+                        <div class="flex flex-col space-y-3 pt-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-2xl font-extrabold text-primary">₹150</span>
+                                <button class="add-to-cart-btn btn-primary bg-primary text-white font-medium py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700" onclick="addItem(3)">
+                                    Add to Cart
+                                </button>
+                            </div>
+                            <!-- Gemini Feature Button -->
+                            <button class="w-full bg-accent/90 text-white font-semibold py-2 px-4 rounded-lg hover:bg-accent transition duration-150" onclick="openCompatibilityModal(3)">
+                                ✨ Check Compatibility
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Message Box for Alerts (Instead of alert()) -->
+            <div id="message-box" class="fixed bottom-5 right-5 z-50 p-4 rounded-xl shadow-2xl bg-secondary text-white hidden opacity-0 transition-opacity duration-300">
+                <!-- Message content goes here -->
+            </div>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-gray-800 text-white mt-12">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 text-center">
+                <p class="mb-4 text-gray-400">&copy; 2024 Sasta BF. All rights reserved.</p>
+                <div class="space-x-4">
+                    <a href="#" class="text-gray-400 hover:text-accent transition duration-150">Privacy Policy</a>
+                    <span class="text-gray-600">|</span>
+                    <a href="#" class="text-gray-400 hover:text-accent transition duration-150">Terms of Service</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Compatibility Check Modal (Hidden by default) -->
+    <div id="compatibility-modal" class="modal fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] opacity-0 pointer-events-none">
+        <div class="modal-content bg-white w-full max-w-lg p-6 rounded-xl shadow-2xl space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-2xl font-bold text-primary">✨ Partner Compatibility Check</h3>
+                <button onclick="closeCompatibilityModal()" class="text-gray-500 hover:text-gray-800 focus:outline-none">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <p id="partner-name-display" class="text-lg font-semibold text-gray-700"></p>
+            <p class="text-gray-600 text-sm">Tell us what you are looking for in a relationship (e.g., "I need someone loyal who can cook")</p>
+            
+            <textarea id="user-preference-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary resize-none" rows="3" placeholder="Enter your desires here..."></textarea>
+            
+            <button id="generate-report-btn" class="w-full btn-primary bg-primary text-white font-semibold py-3 rounded-xl hover:bg-indigo-700 transition duration-150">
+                Generate Compatibility Report
+            </button>
+
+            <!-- Loading Spinner and Report Area -->
+            <div id="report-status" class="hidden flex items-center justify-center p-4">
+                <div class="spinner w-8 h-8 !border-white !border-t-primary"></div>
+                <p class="ml-3 text-primary">Analyzing compatibility...</p>
+            </div>
+
+            <div id="compatibility-report-output" class="pt-4 border-t border-gray-200 mt-4 space-y-2 max-h-80 overflow-y-auto">
+                <h4 class="text-xl font-bold text-secondary">Report:</h4>
+                <p id="report-text" class="text-gray-700 whitespace-pre-wrap">Your report will appear here after analysis.</p>
+            </div>
+        </div>
+    </div>
+
+
+    <script type="module">
+        // Gemini API Configuration
+        const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent";
+        const API_KEY = ""; // Canvas will provide this at runtime
+
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables provided by the Canvas environment (used via window)
+        const firebaseConfig = typeof window.__firebase_config !== 'undefined' ? JSON.parse(window.__firebase_config) : {};
+        const initialAuthToken = typeof window.__initial_auth_token !== 'undefined' ? window.__initial_auth_token : null;
+        
+        let app, db, auth;
+
+        // --- Screen Management ---
+        const loadingScreen = document.getElementById('loading-screen');
+        const shopScreen = document.getElementById('shop-screen');
+
+        // --- Modal Elements ---
+        const compatibilityModal = document.getElementById('compatibility-modal');
+        const partnerNameDisplay = document.getElementById('partner-name-display');
+        const userPreferenceInput = document.getElementById('user-preference-input');
+        const generateReportBtn = document.getElementById('generate-report-btn');
+        const reportStatus = document.getElementById('report-status');
+        const reportText = document.getElementById('report-text');
+
+        let currentPartner = null;
+
+        /**
+         * Transitions the view between the different application screens.
+         * @param {('loading'|'shop')} screenName The screen to show.
+         */
+        function showScreen(screenName) {
+            loadingScreen.classList.add('hidden', 'opacity-0');
+            shopScreen.classList.add('hidden');
+            
+            if (screenName === 'shop') {
+                shopScreen.classList.remove('hidden');
+            }
+        }
+
+        /**
+         * Initializes Firebase and attempts to authenticate the user (silently).
+         */
+        async function initializeAppAndAuth() {
+            try {
+                // 1. Initialize Firebase
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                setLogLevel('Debug'); // Enable logging for debugging Firestore
+
+                // 2. Try to authenticate (silent process)
+                // Set persistence to local to keep the session
+                await setPersistence(auth, browserLocalPersistence);
+
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                
+                // Transition directly to the shop
+                showScreen('shop');
+                console.log("Authentication successful. User ID:", auth.currentUser?.uid);
+                
+            } catch (error) {
+                console.error("Firebase Initialization or Auth Failed. Proceeding to shop with assumed guest state:", error);
+                // Even if auth fails (unlikely in this environment), we proceed to the shop screen
+                showScreen('shop');
+            }
+        }
+
+        // --- Splash Screen & App Start ---
+        
+        // Ensure the splash screen is visible for a minimum duration (2 seconds)
+        const MIN_LOADING_TIME = 2000;
+        const startTime = Date.now();
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const elapsedTime = Date.now() - startTime;
+            const remainingTime = MIN_LOADING_TIME - elapsedTime;
+
+            // Wait for the minimum time, then initialize and transition to shop
+            setTimeout(() => {
+                initializeAppAndAuth();
+            }, Math.max(0, remainingTime));
+        });
+
+
+        // --- Cart/Product Logic (Refactored) ---
+
+        const PRODUCTS = {
+            1: { id: 1, name: "Loyal Soleman Alam", price: 7999, desc: "Good For Your Food Storage, Durability 2 Min, Small Dick, 101% Loyal, Best For Chubby Girls." },
+            2: { id: 2, name: "Introvert Asfaruj Rahaman", price: 5999, desc: "Will Pretend As You Wish, Durability 25 Min, Loyal 100%, Good For The Extrovert And Baddies." },
+            3: { id: 3, name: "Pittu Ekbal Sk", price: 150, desc: "Slim As Your Middle Finger, Durability 2 Hour, Loyal 5%, Good For Sex Addicted Baddies." }, 
+        };
+
+        let cart = [];
+
+        // Element selection utility function (since they are inside shop-screen)
+        function getShopElement(id) {
+            return document.getElementById(id);
+        }
+
+        let cartDrawer, cartOverlay, cartCount, cartItemsContainer, cartTotalDisplay, messageBox;
+
+        window.addEventListener('load', () => {
+            // Assign elements only after shop-screen is theoretically visible
+            cartDrawer = getShopElement('cart-drawer');
+            cartOverlay = getShopElement('cart-overlay');
+            cartCount = getShopElement('cart-count');
+            cartItemsContainer = getShopElement('cart-items-container');
+            cartTotalDisplay = getShopElement('cart-total');
+            messageBox = getShopElement('message-box');
+
+            // Attach event listener for compatibility report generation
+            if (generateReportBtn) {
+                generateReportBtn.addEventListener('click', generateCompatibilityReport);
+            }
+            
+
+            if (cartDrawer) {
+                getShopElement('cart-toggle-btn').addEventListener('click', () => toggleCart(true));
+                getShopElement('close-cart-btn').addEventListener('click', () => toggleCart(false));
+                renderCart();
+            }
+        });
+
+
+        function formatRupee(amount) {
+            return new Intl.NumberFormat('en-IN', {
+                style: 'currency',
+                currency: 'INR',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(amount).replace('₹', '').trim();
+        }
+
+        function showMessage(message, type = 'success') {
+            if (!messageBox) return; // Guard against calling before DOM load
+
+            messageBox.textContent = message;
+            messageBox.className = `fixed bottom-5 right-5 z-50 p-4 rounded-xl shadow-2xl text-white opacity-0 transition-opacity duration-300 ${type === 'success' ? 'bg-secondary' : type === 'info' ? 'bg-primary' : 'bg-red-500'} block`;
+
+            setTimeout(() => {
+                messageBox.style.opacity = '1';
+            }, 10);
+
+            setTimeout(() => {
+                messageBox.style.opacity = '0';
+                setTimeout(() => {
+                    messageBox.classList.add('hidden');
+                }, 300);
+            }, 3000);
+        }
+
+        function toggleCart(open) {
+            if (!cartDrawer) return;
+
+            if (open) {
+                cartDrawer.classList.add('open');
+                cartOverlay.classList.remove('hidden');
+            } else {
+                cartDrawer.classList.remove('open');
+                cartOverlay.classList.add('hidden');
+            }
+        }
+
+        window.addItem = function(productId) {
+            const product = PRODUCTS[productId];
+            if (!product) return;
+
+            const existingItem = cart.find(item => item.id === productId);
+
+            if (existingItem) {
+                existingItem.quantity += 1;
+            } else {
+                cart.push({ ...product, quantity: 1 });
+            }
+
+            renderCart();
+            showMessage(`${product.name} added to cart!`);
+        }
+
+        window.updateQuantity = function(productId, quantityChange) {
+            const itemIndex = cart.findIndex(item => item.id === productId);
+
+            if (itemIndex > -1) {
+                const item = cart[itemIndex];
+                item.quantity += quantityChange;
+
+                if (item.quantity <= 0) {
+                    cart.splice(itemIndex, 1);
+                }
+            }
+            renderCart();
+        }
+
+        function renderCart() {
+            if (!cartItemsContainer || !cartCount || !cartTotalDisplay) return;
+
+            cartItemsContainer.innerHTML = '';
+            let total = 0;
+            let totalItems = 0;
+
+            if (cart.length === 0) {
+                cartItemsContainer.innerHTML = '<p class="text-center text-gray-500 mt-8">Your cart is empty.</p>';
+            } else {
+                cart.forEach(item => {
+                    const itemTotal = item.price * item.quantity;
+                    total += itemTotal;
+                    totalItems += item.quantity;
+
+                    const formattedPrice = formatRupee(item.price);
+                    const formattedItemTotal = formatRupee(itemTotal);
+
+                    const itemElement = document.createElement('div');
+                    itemElement.className = 'flex items-center justify-between border-b pb-4';
+                    itemElement.innerHTML = `
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium text-gray-900 truncate">${item.name}</p>
+                            <p class="text-sm text-gray-500">${item.quantity} x ₹${formattedPrice}</p>
+                            <p class="text-sm font-semibold text-primary">₹${formattedItemTotal}</p>
+                        </div>
+                        <div class="flex items-center space-x-2 ml-4">
+                            <button class="text-gray-500 hover:text-primary" onclick="updateQuantity(${item.id}, -1)">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg>
+                            </button>
+                            <span class="text-lg font-bold">${item.quantity}</span>
+                            <button class="text-gray-500 hover:text-primary" onclick="updateQuantity(${item.id}, 1)">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            </button>
+                        </div>
+                    `;
+                    cartItemsContainer.appendChild(itemElement);
+                });
+            }
+
+            cartCount.textContent = totalItems;
+            cartTotalDisplay.textContent = `₹${formatRupee(total)}`;
+        }
+
+        window.checkout = function() {
+            if (cart.length === 0) {
+                showMessage("Your cart is empty! Add some products first.", 'error');
+                return;
+            }
+
+            showMessage("Checkout simulated! Thank you for your purchase!", 'success');
+            
+            cart = [];
+            renderCart();
+            toggleCart(false);
+        }
+
+        // --- LLM Compatibility Feature Logic ---
+        
+        /**
+         * Opens the Compatibility Modal for a specific partner.
+         * @param {number} productId The ID of the product/partner to check.
+         */
+        window.openCompatibilityModal = function(productId) {
+            currentPartner = PRODUCTS[productId];
+            if (!currentPartner) return;
+
+            // Reset modal state
+            partnerNameDisplay.textContent = `Partner: ${currentPartner.name}`;
+            userPreferenceInput.value = '';
+            reportText.textContent = 'Your report will appear here after analysis.';
+            reportStatus.classList.add('hidden');
+            generateReportBtn.disabled = false;
+            generateReportBtn.textContent = 'Generate Compatibility Report';
+
+            // Show modal
+            compatibilityModal.classList.add('open');
+            compatibilityModal.classList.remove('opacity-0', 'pointer-events-none');
+        }
+
+        /**
+         * Closes the Compatibility Modal.
+         */
+        window.closeCompatibilityModal = function() {
+            compatibilityModal.classList.add('opacity-0', 'pointer-events-none');
+            compatibilityModal.classList.remove('open');
+        }
+
+        /**
+         * Makes the actual API call to Gemini to generate the compatibility report.
+         */
+        async function callGeminiApi(prompt) {
+            const maxRetries = 5;
+            let delay = 1000; // 1 second
+
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const payload = {
+                        contents: [{ parts: [{ text: prompt }] }],
+                        systemInstruction: {
+                            parts: [{ text: "You are a witty, direct, and slightly cynical relationship compatibility advisor named 'Astro BF'. Based on the user's preference and the partner's description, write a concise, three-section compatibility report: 1. Verdict (A direct yes/no/maybe with a percentage match). 2. Key Strengths (How they align). 3. Potential Issues (Where they conflict or need work). Use emojis." }]
+                        },
+                        config: {
+                            temperature: 0.7,
+                        }
+                    };
+
+                    const response = await fetch(`${GEMINI_API_URL}?key=${API_KEY}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        // Throw error if the response status is not OK (e.g., 429 rate limit)
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "Error: Could not generate report. Try again.";
+                    return text;
+
+                } catch (error) {
+                    console.error("API Call attempt failed:", error);
+                    if (i < maxRetries - 1) {
+                        // Exponential backoff
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2;
+                    } else {
+                        throw new Error("Failed to connect to the compatibility advisor after several retries.");
+                    }
+                }
+            }
+        }
+
+
+        /**
+         * Main function to handle report generation button click.
+         */
+        async function generateCompatibilityReport() {
+            const userPreference = userPreferenceInput.value.trim();
+            if (!userPreference) {
+                showMessage("Please enter what you are looking for first.", 'error');
+                return;
+            }
+
+            const partnerName = currentPartner.name;
+            const partnerDesc = currentPartner.desc;
+
+            const prompt = `User Preference: "${userPreference}". Partner Profile: Name: ${partnerName}. Description: ${partnerDesc}.`;
+
+            // UI feedback: Loading state
+            reportText.textContent = '';
+            reportStatus.classList.remove('hidden');
+            generateReportBtn.disabled = true;
+            generateReportBtn.textContent = 'Generating...';
+
+            try {
+                const report = await callGeminiApi(prompt);
+                reportText.textContent = report;
+                showMessage(`Compatibility Report for ${partnerName} generated!`, 'info');
+            } catch (error) {
+                reportText.textContent = `Astro BF is busy! Error: ${error.message}`;
+                showMessage("Failed to generate report.", 'error');
+            } finally {
+                // UI feedback: Reset state
+                reportStatus.classList.add('hidden');
+                generateReportBtn.disabled = false;
+                generateReportBtn.textContent = 'Generate Compatibility Report';
+            }
+        }
+    </script>
+
+</body>
+  </html>
